@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Monaco from "@monaco-editor/react";
 
 function CodeValidator() {
   const [codigo, setCodigo] = useState("");
@@ -391,15 +392,20 @@ function CodeValidator() {
   }
 
   return (
-    <div>
-      <textarea
+    <div className="area">
+      <Monaco
+        width="800"
+        height="50vh"
+        language="javascript"
+        theme="hc-black" // Puedes cambiar el tema según tus preferencias
         value={codigo}
-        onChange={(e) => {
-          setCodigo(e.target.value);
+        options={{
+          selectOnLineNumbers: false,
+          mouseStyle: "text",
+          acceptSuggestionOnEnter: false,
         }}
-        placeholder="Ingrese su código aquí"
-        rows={20}
-      ></textarea>
+        onChange={(newValue) => setCodigo(newValue)}
+      />
       <div className="line-validator">
         <button onClick={handleValidarClick}>Validar Código</button>
         {esValido && <div className="success">¡La sintaxis es correcta!</div>}
