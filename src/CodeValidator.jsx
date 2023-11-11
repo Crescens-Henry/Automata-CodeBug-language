@@ -9,7 +9,6 @@ function CodeValidator() {
     try {
       // Paso 1: Analizador léxico (tokenización)
       const tokens = analizarCodigo(codigo);
-      // Verificar si se encontraron tokens válidos
 
       // Paso 2: Analizador sintáctico (construcción del AST)
       const ast = construirAST(tokens);
@@ -17,18 +16,40 @@ function CodeValidator() {
       // Paso 3: Validación del AST
       const esValido = validarAST(ast);
 
-      if (esValido) {
-        setError(null); // Si el código es válido, borra cualquier mensaje de error previo
+      // Paso 4: Validación de llaves
+      const llavesValidas = validarLlaves(codigo);
+
+      if (esValido && llavesValidas) {
+        setError(null);
         setEsValido(true);
       } else {
         setError(
-          "Error de sintaxis: El código no cumple con las reglas gramaticales."
-        ); // Solo establece el error si el código es inválido
+          "Error de sintaxis: El código no cumple con las reglas gramaticales o tiene problemas con las llaves."
+        );
         setEsValido(false);
       }
     } catch (e) {
       setError("Error inesperado: " + e.message);
     }
+  }
+  function validarLlaves(codigo) {
+    const pilaLlaves = [];
+
+    for (let i = 0; i < codigo.length; i++) {
+      const caracter = codigo[i];
+
+      if (caracter === "{") {
+        pilaLlaves.push("{");
+      } else if (caracter === "}") {
+        if (pilaLlaves.length === 0) {
+          // Se encontró una llave de cierre sin su correspondiente llave de apertura
+          return false;
+        }
+        pilaLlaves.pop(); // Se encontró una llave de cierre correspondiente
+      }
+    }
+
+    return pilaLlaves.length === 0; // Si la pila está vacía, todas las llaves tienen su correspondiente
   }
   function handleValidarClick() {
     validarCodigo();
@@ -47,7 +68,6 @@ function CodeValidator() {
 
     for (let i = 0; i < lineas.length; i++) {
       const linea = lineas[i].trim();
-      console.log("Tipo de linea:", typeof linea);
 
       if (linea === "") {
         continue; // Ignorar líneas en blanco
@@ -57,7 +77,6 @@ function CodeValidator() {
       let esDeclaracion = false;
 
       for (const palabra of palabras) {
-        console.log("Tipo de palabra en el bucle interno:", typeof palabra);
         // Declaración de variable: <nombre de variable> : <valor>
         if (palabra.includes(":")) {
           const [nombre, valor] = palabra.split(":");
@@ -68,8 +87,15 @@ function CodeValidator() {
             nivelAnidacion,
           });
           esDeclaracion = true;
+        } else if (palabra === "return") {
+          const [returnStatement, valor] = palabra.includes("return");
+          tokens.push({
+            tipo: "DeclaracionReturn",
+            returnStatement,
+            valor,
+          });
         }
-        // Declaración de función: fc <nombre de funcion> (<parametros>) <tipo de valor a retornar> { return: contenido }
+        // Declaración de función: fc <nombre de funcion> (<parametros>) <tipo de valor a retornar> { contenido }
         else if (palabra === "fc") {
           const nombreFuncion = palabras[palabras.indexOf(palabra) + 1];
           const parametrosIndex = linea.indexOf("(");
@@ -100,25 +126,7 @@ function CodeValidator() {
               nivelAnidacion--;
               break; // Se encontró el cierre de la función
             }
-            // Buscar 'return' en cualquier parte de la línea
-            const returnIndex = lineaContenido.indexOf("return");
-            if (returnIndex !== -1) {
-              const retorno = lineaContenido
-                .substring(returnIndex + "return".length)
-                .trim();
-              if (retorno !== "") {
-                // Agregar la declaración 'return' como un token
-                contenido.push({
-                  tipo: "ReturnStatement",
-                  valor: retorno,
-                });
-              } else {
-                // El valor de 'return' no puede estar vacío
-                throw new Error(
-                  "Error: El valor de 'return' no puede estar vacío."
-                );
-              }
-            } else if (lineaContenido !== "") {
+            if (lineaContenido !== "") {
               contenido.push(lineaContenido);
             }
             i++;
@@ -204,7 +212,6 @@ function CodeValidator() {
       }
 
       if (!esDeclaracion) {
-        console.log("Contenido de 'linea' antes de push:", linea);
         // Si no es una declaración, puede ser una línea de código o error
         // Aquí puedes agregar más lógica para identificar y manejar errores
         tokens.push({
@@ -213,7 +220,6 @@ function CodeValidator() {
           nivelAnidacion,
         });
       }
-      console.log("Tipo de linea al final del bucle interno:", typeof linea);
     }
     return tokens;
   }
@@ -278,11 +284,7 @@ function CodeValidator() {
   }
   // Función para validar el AST según las reglas gramaticales del lenguaje
   function validarAST(ast) {
-    console.log("Entrando en validarAST");
-
     for (const nodo of ast) {
-      console.log("Tipo de nodo:", nodo.tipo);
-
       if (nodo.tipo === "DeclaracionVariable") {
         // Validar la declaración de variable
         if (!validarDeclaracionVariable(nodo)) {
@@ -330,11 +332,12 @@ function CodeValidator() {
       nodo.nombreFuncion &&
       Array.isArray(nodo.parametros) &&
       nodo.parametros.length > 0 &&
-      nodo.tipoRetorno !== undefined && // Corrección: Cambiado de '&&' a '!=='
+      nodo.tipoRetorno &&
       nodo.contenido
     ) {
       if (!/^[a-zA-Z_]\w*$/.test(nodo.nombreFuncion)) {
         console.log("error en nombre de funcion");
+
         return false; // El nombre de la función es inválido
       }
 
@@ -345,27 +348,14 @@ function CodeValidator() {
           return false; // Nombre de parámetro inválido
         }
       }
-      // Corrección: Movido el bloque de validación del tipo de retorno fuera del bucle de parámetros
       if (!/^(int|float|string)$/.test(nodo.tipoRetorno)) {
         console.log("error en tipo de retorno");
         return false; // El tipo de retorno es inválido
       }
 
-      // Valida el contenido de la función
-      const hasReturnStatement = nodo.contenido.some((linea) => {
-        const trimmedLine = linea.trim();
-        console.log("Línea actual:", trimmedLine);
-        return trimmedLine.startsWith("return ");
-      });
-
-      if (!hasReturnStatement) {
-        console.log("Error: Falta declaración 'return' en la función");
-        return false; // El contenido de la función no contiene una declaración 'return'
-      }
-
       // Valida el contenido de la función llamando a validarAST nuevamente
       if (!validarAST(nodo.contenido)) {
-        console.log("Error contenido");
+        console.log("Error en contenido", e);
         return false; // El contenido de la función es inválido
       }
 
