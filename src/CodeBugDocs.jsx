@@ -38,7 +38,7 @@ function CodeBugDocs() {
       content: [
         {
           subtitle: "Metodo unico",
-          code: `if ( x>10 ) {\n\treturn 20\n}`,
+          code: `if ( x>b ) {\n\treturn 20\n}`,
         },
       ],
     },
