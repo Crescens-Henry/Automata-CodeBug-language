@@ -1,4 +1,5 @@
 import "./App.css";
+import CodeBugDocs from "./CodeBugDocs";
 import CodeValidator from "./CodeValidator";
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
         <h2>Kristell Perez Mateos</h2>
       </div>
       <CodeValidator />
+      <CodeBugDocs />
     </>
   );
 }
