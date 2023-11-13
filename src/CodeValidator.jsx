@@ -17,6 +17,14 @@ function CodeValidator() {
         setEsValido(false);
         return;
       }
+      // Paso 2.1: Verificar la presencia de dos puntos en el bucle "for"
+      if (!validarDosPuntosEnFor(codigo)) {
+        setError(
+          "Error de sintaxis: Falta el segundo punto y coma en el bucle 'for'."
+        );
+        setEsValido(false);
+        return;
+      }
 
       // Paso 3: Analizador sintáctico (construcción del AST)
       const ast = construirAST(tokens);
@@ -37,7 +45,7 @@ function CodeValidator() {
         setEsValido(false);
       }
     } catch (e) {
-      setError("Error inesperado: " + e.message);
+      console.log("Error inesperado: " + e.message);
     }
   }
 
@@ -104,15 +112,15 @@ function CodeValidator() {
     const lineas = codigo.split("\n");
 
     for (let i = 0; i < lineas.length; i++) {
-      const linea = lineas[i].trim();
+      const linea = lineas[i];
+      // Asegurarse de que 'linea' no sea undefined
 
-      if (linea === "") {
-        continue; // Ignorar líneas en blanco
+      if (!linea || linea.trim() === "") {
+        continue; // Ignorar líneas en blanco o undefined
       }
 
-      const palabras = linea.split(/\s+/); // Dividir la línea en palabras
+      const palabras = linea.trim().split(/\s+/); // Dividir la línea en palabras
       let esDeclaracion = false;
-
       for (const palabra of palabras) {
         // Declaración de variable: <nombre de variable>:<valor>
         if (palabra.includes(":")) {
@@ -140,7 +148,7 @@ function CodeValidator() {
           esDeclaracion = true;
         }
 
-        // Declaración de función: fc <nombre de funcion> (<parametros>) <tipo de valor a retornar> { contenido }
+        // Declaración de función: fc <nombre de funcion> (<parametros>) <tipo de valor a retornar> { return valor }
         else if (palabra === "fc") {
           const nombreFuncion = palabras[palabras.indexOf(palabra) + 1];
           const parametrosIndex = linea.indexOf("(");
@@ -150,6 +158,7 @@ function CodeValidator() {
             .substring(parametrosIndex + 1, linea.indexOf(")"))
             .split(",")
             .map((param) => param.trim());
+
           tokens.push({
             tipo: "DeclaracionFuncion",
             nombreFuncion,
@@ -159,6 +168,7 @@ function CodeValidator() {
             nivelAnidacion,
           });
           esDeclaracion = true;
+
           pilaBloques.push({
             tipo: "DeclaracionFuncion",
             nivel: nivelAnidacion,
@@ -180,41 +190,48 @@ function CodeValidator() {
         }
         // Estructura "for": for <inicializacion>; <condicion>; <incremento> { contenido }
         else if (palabra === "for") {
-          const bucleForPartes = linea.split(";");
-          const inicializacion = bucleForPartes[0]
-            .substring(bucleForPartes[0].indexOf(" ") + 1)
-            .trim();
-          const condicion = bucleForPartes[1].trim();
-          const incremento = bucleForPartes[2].trim();
+          // Utilizar una expresión regular para dividir la línea del bucle "for"
+          const regexFor = /for\s*(.*?);(.*?);(.*?)\s*{/;
+          const match = linea.match(regexFor);
 
-          // Corregir la parte del incremento para excluir las llaves
-          const incrementoSinLlaves = incremento.replace(/{|}/g, "").trim();
+          if (match) {
+            const inicializacion = match[1].trim();
+            const condicion = match[2].trim();
+            const incremento = match[3].trim();
 
-          tokens.push({
-            tipo: "BucleFor",
-            inicializacion,
-            condicion,
-            incremento: incrementoSinLlaves, // Usar la versión corregida del incremento
-            contenido: [], // Agregar un array para almacenar el contenido del bucle
-            nivelAnidacion,
-          });
-          esDeclaracion = true;
-          pilaBloques.push({ tipo: "BucleFor", nivel: nivelAnidacion });
-          nivelAnidacion++;
-          i++; // Avanzar a la siguiente línea para procesar el contenido
-          while (i < lineas.length) {
-            const lineaContenido = lineas[i].trim();
-            if (lineaContenido === "}") {
-              nivelAnidacion--;
-              break; // Se encontró el cierre del bucle "for"
+            const bucleForPartes = linea.split(";");
+
+            // Corregir la parte del incremento para excluir las llaves
+            const incrementoSinLlaves = incremento.replace(/{|}/g, "").trim();
+
+            tokens.push({
+              tipo: "BucleFor",
+              inicializacion,
+              condicion,
+              incremento: incrementoSinLlaves, // Usar la versión corregida del incremento
+              contenido: [], // Agregar un array para almacenar el contenido del bucle
+              nivelAnidacion,
+            });
+            esDeclaracion = true;
+            pilaBloques.push({ tipo: "BucleFor", nivel: nivelAnidacion });
+            nivelAnidacion++;
+            i++; // Avanzar a la siguiente línea para procesar el contenido
+            while (i < lineas.length) {
+              const lineaContenido = lineas[i].trim();
+              if (lineaContenido === "}") {
+                nivelAnidacion--;
+                break; // Se encontró el cierre del bucle "for"
+              }
+              if (lineaContenido !== "") {
+                // Almacenar las líneas de contenido en el array correspondiente
+                tokens[tokens.length - 1].contenido.push(lineaContenido);
+              }
+              i++;
             }
-            if (lineaContenido !== "") {
-              // Almacenar las líneas de contenido en el array correspondiente
-              tokens[tokens.length - 1].contenido.push(lineaContenido);
-            }
-            i++;
+            i--; // Retroceder una línea para evitar saltar una línea
+          } else {
+            console.log("Error al analizar la línea del bucle 'for'");
           }
-          i--; // Retroceder una línea para evitar saltar una línea
         }
 
         // Estructura "if": if (<condicion>) { contenido }
@@ -331,6 +348,12 @@ function CodeValidator() {
           tipo: "LineaDeCodigo",
           contenido: token.contenido,
         });
+      } else if (token.tipo == "DeclaracionReturn") {
+        const nodoReturn = {
+          tipo: "DeclaracionReturn",
+          valor: token.valor,
+        };
+        pila[pila.length - 1].push(nodoReturn);
       }
     }
     console.log(ast);
@@ -418,6 +441,15 @@ function CodeValidator() {
         return false; // El contenido de la función es inválido
       }
 
+      if (!nodo.contenido.length != 0) {
+        console.log("entro a contenido porque es nulo");
+        return false;
+      }
+      if (!/^[a-zA-Z\d]+$/.test(nodo.nodoReturn)) {
+        console.log("error en tipo de retorno en contenido");
+        return false; // El tipo de retorno es inválido
+      }
+
       return true; // La declaración de función es válida
     }
     console.log("error es que falta algo que no se que es XD ");
@@ -450,7 +482,33 @@ function CodeValidator() {
       console.log("Error en el incremento del bucle 'for'");
       return false;
     }
+    return true;
+  }
 
+  // Nueva función para validar dos puntos en el bucle "for"
+  function validarDosPuntosEnFor(codigo) {
+    console.log("entre en validar dos puintos ");
+    const lineas = codigo.split("\n");
+
+    for (let i = 0; i < lineas.length; i++) {
+      const linea = lineas[i].trim();
+
+      // Asegurarse de que la línea comienza con "for"
+      if (linea.startsWith("for")) {
+        // Dividir la línea en partes usando puntos y coma como delimitador
+        const partes = linea.split(";");
+
+        // Verificar que haya al menos tres partes en la línea del bucle "for"
+        if (partes.length < 3) {
+          console.log(
+            "Error en la línea del bucle 'for': Falta algún componente"
+          );
+          return false;
+        }
+      }
+    }
+
+    // Se encontraron al menos tres partes en todas las líneas del bucle "for"
     return true;
   }
 
